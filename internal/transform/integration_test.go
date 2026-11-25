@@ -94,6 +94,56 @@ func TestFullTransform(t *testing.T) {
 	}
 }
 
+func TestSelectedProgramRetainsDependencies(t *testing.T) {
+	input := `@callback = global ptr @timer_fn
+@other_callback = global ptr @other_fn
+
+define i32 @entry(ptr %ctx) {
+  %value = call i32 @worker()
+  %cb = load ptr, ptr @callback
+  ret i32 %value
+}
+define internal i32 @worker() {
+  %value = call i32 @nested()
+  ret i32 %value
+}
+define internal i32 @nested() {
+  ret i32 1
+}
+define internal i32 @timer_fn() {
+  ret i32 0
+}
+define internal i32 @other_fn() {
+  ret i32 0
+}
+define i32 @unused() {
+  ret i32 0
+}
+`
+	lines, err := TransformLines(context.Background(), strings.Split(input, "\n"), Options{
+		Programs: []string{"entry"},
+		Sections: map[string]string{"entry": "syscall"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := strings.Join(lines, "\n")
+	for _, want := range []string{
+		`@entry(ptr %ctx) section "syscall"`,
+		`@worker() section ".text"`,
+		`@nested() section ".text"`,
+		`@timer_fn() section ".text"`,
+		`@other_fn() section ".text"`,
+	} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing %q in:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "define i32 @unused()") {
+		t.Errorf("unselected program retained:\n%s", output)
+	}
+}
+
 func TestFullTransformLLC(t *testing.T) {
 	tests := []struct {
 		name     string

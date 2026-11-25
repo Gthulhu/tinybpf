@@ -66,6 +66,8 @@ Maps exported Go function names to ELF section names. The section name determine
 ```
 
 When omitted, programs are auto-detected from exported functions.
+When specified, referenced user functions and functions referenced by retained
+user globals are also kept as BPF subprograms in `.text`.
 
 ### Custom passes
 

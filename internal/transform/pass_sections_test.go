@@ -45,7 +45,7 @@ func TestSectionsPassModule(t *testing.T) {
 					{Kind: ir.TopFunction, Function: fn, Raw: fn.Raw},
 				},
 			}
-			if err := sectionsPassModule(m, tt.sections); err != nil {
+			if err := sectionsPassModule(m, tt.sections, nil); err != nil {
 				t.Fatal(err)
 			}
 			if g.Section != tt.wantGlobalSect {

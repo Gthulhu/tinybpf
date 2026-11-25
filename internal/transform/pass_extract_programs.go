@@ -30,6 +30,9 @@ func extractProgramsModule(m *ir.Module, programNames []string, verbose bool, w 
 		fmt.Fprintf(w, "[transform] auto-detected %d programs: %v (use --programs to select explicitly)\n",
 			len(names), names)
 	}
+	if len(programNames) > 0 {
+		includeProgramDependencies(m, programSet)
+	}
 	for _, fn := range m.Functions {
 		if !programSet[fn.Name] {
 			fn.Removed = true
@@ -43,6 +46,62 @@ func extractProgramsModule(m *ir.Module, programNames []string, verbose bool, w 
 	}
 	markRuntimeGlobalsRemoved(m)
 	return nil
+}
+
+// includeProgramDependencies retains functions referenced by selected programs
+// and by user globals, which are kept as data sections even if unreferenced.
+func includeProgramDependencies(m *ir.Module, keep map[string]bool) {
+	definitions := make(map[string]ir.TopLevelEntry)
+	for _, entry := range m.Entries {
+		if entry.Function != nil {
+			definitions[entry.Function.Name] = entry
+		} else if entry.Global != nil && !isRuntimeGlobal(entry.Global.Name) {
+			definitions[entry.Global.Name] = entry
+		}
+	}
+	queue := make([]string, 0, len(keep))
+	for name := range keep {
+		queue = append(queue, name)
+	}
+	for name, entry := range definitions {
+		if entry.Global != nil {
+			queue = append(queue, name)
+		}
+	}
+	seen := make(map[string]bool)
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		entry, ok := definitions[name]
+		if !ok {
+			continue
+		}
+		for _, line := range entryTextLines(entry) {
+			for i := 0; i < len(line); i++ {
+				if line[i] != '@' {
+					continue
+				}
+				start := i + 1
+				end := start
+				for end < len(line) && (isIdentCharByte(line[end]) || line[end] == '-' || line[end] == '$') {
+					end++
+				}
+				ref := line[start:end]
+				dep, exists := definitions[ref]
+				if exists && !seen[ref] && (dep.Function == nil || !isRuntimeFunc(ref)) {
+					if dep.Function != nil {
+						keep[ref] = true
+					}
+					queue = append(queue, ref)
+				}
+				i = end - 1
+			}
+		}
+	}
 }
 
 // buildProgramSet resolves which functions to keep based on explicit names or auto-detection.
