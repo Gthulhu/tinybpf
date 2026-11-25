@@ -7,11 +7,11 @@ import (
 )
 
 // sectionsPassModule assigns ELF sections to globals and program functions in a single pass.
-func sectionsPassModule(m *ir.Module, sections map[string]string) error {
+func sectionsPassModule(m *ir.Module, sections map[string]string, programs []string) error {
 	if err := assignDataSectionsModule(m); err != nil {
 		return err
 	}
-	return assignProgramSectionsModule(m, sections)
+	return assignProgramSectionsModule(m, sections, programs)
 }
 
 // assignDataSectionsModule assigns .data, .bss, or .rodata sections to globals that lack one.
@@ -51,7 +51,11 @@ func classifyGlobalSectionFromAST(g *ir.Global) string {
 }
 
 // assignProgramSectionsModule adds ELF section attributes to function definitions and map globals.
-func assignProgramSectionsModule(m *ir.Module, sections map[string]string) error {
+func assignProgramSectionsModule(m *ir.Module, sections map[string]string, programs []string) error {
+	programSet := make(map[string]bool, len(programs))
+	for _, name := range programs {
+		programSet[name] = true
+	}
 	for i := range m.Entries {
 		e := &m.Entries[i]
 		if e.Removed {
@@ -64,7 +68,11 @@ func assignProgramSectionsModule(m *ir.Module, sections map[string]string) error
 				sec = sections[fn.Name]
 			}
 			if sec == "" {
-				sec = fn.Name
+				if len(programs) > 0 && !programSet[fn.Name] {
+					sec = ".text"
+				} else {
+					sec = fn.Name
+				}
 			}
 			if !strings.Contains(fn.Raw, " section ") {
 				fn.Raw = insertSection(fn.Raw, sec)

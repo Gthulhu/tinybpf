@@ -31,13 +31,13 @@ func TestInferProgramType(t *testing.T) {
 			"",
 		},
 		{
-			"multiple sections same type",
+			"multiple section types",
 			map[string]string{
 				"entry":  "kprobe/do_sys_openat2",
 				"return": "kretprobe/do_sys_openat2",
 			},
 			"",
-			"conflicting program types",
+			"",
 		},
 		{
 			"multiple kprobe sections agree",
@@ -225,6 +225,32 @@ func TestValidateProgramType(t *testing.T) {
 			map[string]string{"prog": "iter/task"},
 			"iterator programs are not supported",
 		},
+	}
+
+	func TestValidateConfigMixedSections(t *testing.T) {
+		cfg := Config{
+			Inputs: []string{"program.ll"},
+			Output: "program.o",
+			Sections: map[string]string{
+				"hook": "kprobe/do_sys_openat2",
+				"call": "syscall",
+			},
+		}
+		if err := validateConfig(&cfg); err != nil {
+			t.Fatal(err)
+		}
+		if cfg.ProgramType != "" {
+			t.Fatalf("mixed sections inferred type %q", cfg.ProgramType)
+		}
+		cfg.ProgramType = "kprobe"
+		if err := validateConfig(&cfg); err == nil {
+			t.Fatal("explicit program type must still reject mismatched sections")
+		}
+		cfg.ProgramType = ""
+		cfg.Sections["call"] = "iter/task"
+		if err := validateConfig(&cfg); err == nil || !strings.Contains(err.Error(), "iterator programs are not supported") {
+			t.Fatalf("unsupported iterator should be rejected, got %v", err)
+		}
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

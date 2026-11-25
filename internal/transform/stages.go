@@ -21,7 +21,7 @@ func buildModuleStages(opts Options) []moduleStage {
 		{"rewrite-helpers", rewriteHelpersModule},
 		{"core", corePassModule},
 		{"sections", func(m *ir.Module) error {
-			return sectionsPassModule(m, opts.Sections)
+			return sectionsPassModule(m, opts.Sections, opts.Programs)
 		}},
 		{"map-btf", mapBTFPassModule},
 		{"finalize", func(m *ir.Module) error {
